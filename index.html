@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>업무 TO-DO 개선·오류 접수</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#F4F6F9; --surface:#FFFFFF; --fg:#1B2330; --muted:#5F6B7A; --line:#DCE2EA; --line-strong:#BFC8D4;
+  --accent:#2456D6; --accent-fg:#FFFFFF; --accent-soft:#E7EEFC;
+  --bug:#C73B3B; --bug-soft:#FBE9E9; --imp:#1F7A4D; --imp-soft:#E4F4EB; --ask:#A86A0C; --ask-soft:#FBF0DC;
+  --neutral-soft:#EDF0F4; --urgent:#C73B3B;
+  --font-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --radius:10px; --shadow:0 1px 2px rgba(20,30,50,.06),0 4px 14px rgba(20,30,50,.05);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;word-break:keep-all}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:20px 48px}
+h1,h2,h3{margin:0;text-wrap:balance;line-height:1.3}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+
+.head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.head h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.head .sub{color:var(--muted);margin-top:6px}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:2px;min-width:72px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.stat b{font-family:var(--font-mono);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-size:11px;color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){ .grid{grid-template-columns:minmax(0,1fr)} }
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.form{position:sticky;top:12px;padding:18px}
+@media (max-width:860px){ .form{position:static} }
+.form h2{font-size:16px;font-weight:600;margin-bottom:4px}
+.form .hint{color:var(--muted);font-size:13px;margin-bottom:14px}
+.fields{display:grid;gap:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){ .row2{grid-template-columns:1fr} }
+label.f{display:grid;gap:5px;font-size:12.5px;font-weight:500;color:var(--muted)}
+label.f > span b{color:var(--urgent);font-weight:600}
+.in{width:100%;padding:9px 11px;border:1px solid var(--line-strong);border-radius:7px;background:var(--bg);color:var(--fg);min-width:0}
+.in:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+textarea.in{min-height:150px;resize:vertical;line-height:1.5}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:7px;overflow:hidden}
+.seg button{flex:1;padding:8px 4px;background:var(--bg);border:0;border-right:1px solid var(--line);cursor:pointer;font-weight:500;color:var(--muted)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.seg button[data-kind="bug"][aria-pressed="true"]{background:var(--bug-soft);color:var(--bug)}
+.seg button[data-kind="imp"][aria-pressed="true"]{background:var(--imp-soft);color:var(--imp)}
+.seg button[data-kind="ask"][aria-pressed="true"]{background:var(--ask-soft);color:var(--ask)}
+.lnk{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font-size:12.5px;text-decoration:underline;text-underline-offset:2px}
+.shot{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.shot img{max-width:120px;max-height:80px;border:1px solid var(--line);border-radius:6px}
+.drop{border:1px dashed var(--line-strong);border-radius:7px;padding:10px 12px;color:var(--muted);font-size:12.5px;background:var(--bg)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.btn{padding:10px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-weight:600;background:var(--accent);color:var(--accent-fg)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.ghost{background:transparent;border-color:var(--line-strong);color:var(--fg);font-weight:500}
+.btn.sm{padding:6px 10px;font-size:12.5px}
+.msg{font-size:13px;padding:9px 12px;border-radius:7px;background:var(--accent-soft);color:var(--accent)}
+.msg.err{background:var(--bug-soft);color:var(--bug)}
+.msg.warn{background:var(--ask-soft);color:var(--ask)}
+
+.listhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.listhead h2{font-size:16px;font-weight:600}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{padding:5px 10px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);cursor:pointer;font-size:12.5px;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.sel{padding:5px 8px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);font-size:12.5px}
+.cards{display:grid;gap:10px}
+.card{padding:14px 16px;display:grid;gap:8px}
+.card .top{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.num{font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tag{font-size:11.5px;padding:2px 8px;border-radius:999px;font-weight:600;line-height:1.6;white-space:nowrap}
+.tag.menu{background:var(--neutral-soft);color:var(--fg);font-weight:500}
+.tag.bug{background:var(--bug-soft);color:var(--bug)} .tag.imp{background:var(--imp-soft);color:var(--imp)} .tag.ask{background:var(--ask-soft);color:var(--ask)}
+.tag.urgent{background:var(--bug);color:#fff}
+.card h3{font-size:15px;font-weight:600}
+.meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.meta .when{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.55}
+.body.clamp{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.thumb{display:block;max-width:220px;max-height:140px;border:1px solid var(--line);border-radius:6px;cursor:zoom-in;object-fit:cover}
+.r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.empty{padding:36px 18px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-weight:600;margin-bottom:4px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;z-index:50}
+.lightbox img{max-width:100%;max-height:100%;border-radius:6px;background:#fff}
+.foot{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.auth{max-width:460px;margin:0 auto;padding:18px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tab{background:none;border:0;padding:8px 12px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>업무 TO-DO 개선·오류 접수</h1>
+      <p class="sub">업무 TO-DO 메뉴를 사용하면서 발견한 오류나 개선 의견을 남겨 주세요.<br>메신저 대신 이 화면으로 접수를 모읍니다.</p>
+    </div>
+    <div class="stats" id="stats" aria-live="polite"></div>
+  </header>
+
+  <section class="panel auth" id="authBox" hidden>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" id="tabLogin" aria-selected="true">로그인</button>
+      <button type="button" class="tab" id="tabJoin" aria-selected="false">가입</button>
+    </div>
+    <form id="loginForm" class="fields" novalidate>
+      <label class="f"><span>가입 이메일</span><input class="in" id="loginId" type="email" autocomplete="username" placeholder="예: test@newzen.kr"></label>
+      <label class="f"><span>비밀번호</span><input class="in" id="loginPw" type="password" autocomplete="current-password"></label>
+      <div id="loginMsg" hidden></div>
+      <div class="r"><button class="btn" id="loginBtn" type="submit">로그인</button></div>
+    </form>
+    <form id="joinForm" class="fields" novalidate hidden>
+      <div class="row2">
+        <label class="f"><span>이름 <b>*</b></span><input class="in" id="joinName" maxlength="20" autocomplete="name"></label>
+        <label class="f"><span>부서 <b>*</b></span><input class="in" id="joinDept" maxlength="20" autocomplete="organization"></label>
+      </div>
+      <label class="f"><span>이메일 <b>*</b></span><input class="in" id="joinId" type="email" maxlength="60" autocomplete="username" placeholder="예: test@newzen.kr"></label>
+      <div class="row2">
+        <label class="f"><span>비밀번호 <b>*</b></span><input class="in" id="joinPw" type="password" autocomplete="new-password" placeholder="6자 이상"></label>
+        <label class="f"><span>비밀번호 확인 <b>*</b></span><input class="in" id="joinPw2" type="password" autocomplete="new-password"></label>
+      </div>
+      <div id="joinMsg" hidden></div>
+      <div class="r"><button class="btn" id="joinBtn" type="submit">가입하고 시작</button></div>
+    </form>
+  </section>
+
+  <div class="grid" id="main" hidden>
+    <section class="panel form" aria-labelledby="formTitle">
+      <h2 id="formTitle">접수하기</h2>
+      <p class="hint">오류는 재현 순서까지 적어 주시면 빠르게 확인할 수 있습니다.<br>화면 캡처는 내용 칸에 붙여넣기(Ctrl+V)하면 첨부됩니다.</p>
+      <div id="gate" hidden></div>
+      <form id="form" class="fields" novalidate>
+        <div class="row2">
+          <label class="f"><span>메뉴 <b>*</b></span>
+            <select class="in" id="menu" required>
+              <option value="">선택</option>
+              <option value="GWS200100">TO-DO</option>
+              <option value="GWS200110">Daily</option>
+              <option value="GWS200120">주간/월간 일지</option>
+              <option value="GWS200130">업무환경설정</option>
+              <option value="GWS200140">Daily 현황</option>
+              <option value="COMMON">공통 / 결재양식 / 기타</option>
+            </select>
+          </label>
+          <label class="f"><span>접수자</span>
+            <input class="in" id="reporter" readonly tabindex="-1">
+          </label>
+        </div>
+        <label class="f"><span>구분 <b>*</b></span>
+          <div class="seg" id="kind" role="group" aria-label="구분">
+            <button type="button" data-kind="bug" aria-pressed="true">오류</button>
+            <button type="button" data-kind="imp" aria-pressed="false">개선</button>
+            <button type="button" data-kind="ask" aria-pressed="false">문의</button>
+          </div>
+        </label>
+        <label class="f"><span>긴급도</span>
+          <div class="seg" id="prio" role="group" aria-label="긴급도">
+            <button type="button" data-prio="high" aria-pressed="false">긴급 (업무 막힘)</button>
+            <button type="button" data-prio="mid" aria-pressed="true">보통</button>
+            <button type="button" data-prio="low" aria-pressed="false">낮음</button>
+          </div>
+        </label>
+        <label class="f"><span>제목 <b>*</b></span>
+          <input class="in" id="title" placeholder="예) Daily 상신 후 소요시간이 0으로 보임" maxlength="120">
+        </label>
+        <label class="f"><span>내용 <b>*</b></span>
+          <textarea class="in" id="body" placeholder="어느 화면에서, 무엇을 했을 때, 어떻게 되었는지 적어 주세요."></textarea>
+        </label>
+        <div class="shot">
+          <div class="drop" id="drop">캡처 이미지를 여기에 끌어다 놓거나, 내용 칸에 붙여넣기 · <button type="button" class="lnk" id="pickBtn">파일 선택</button></div>
+          <input type="file" id="file" accept="image/*" hidden>
+          <div id="shotPreview" hidden><img id="shotImg" alt="첨부 캡처 미리보기"> <button type="button" class="lnk" id="shotRemove">첨부 제거</button></div>
+        </div>
+        <div id="formMsg" hidden></div>
+        <div class="r">
+          <button type="submit" class="btn" id="submit">접수</button>
+          <span style="font-size:12px;color:var(--muted)">접수 내용은 본인과 담당자에게만 보입니다. 다른 PC에서도 같은 이메일로 로그인하면 내 목록이 보입니다.</span>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="listTitle">
+      <div class="listhead">
+        <h2 id="listTitle"><span id="listName">내 접수 목록</span> <span class="num" id="count"></span></h2>
+        <div class="filters" id="filters">
+          <button class="chip" data-f="all" aria-pressed="true">전체</button>
+          <button class="chip" data-f="bug" aria-pressed="false">오류</button>
+          <button class="chip" data-f="imp" aria-pressed="false">개선</button>
+          <button class="chip" data-f="ask" aria-pressed="false">문의</button>
+          <select class="sel" id="menuFilter" aria-label="메뉴 필터">
+            <option value="">모든 메뉴</option>
+            <option value="GWS200100">TO-DO</option>
+            <option value="GWS200110">Daily</option>
+            <option value="GWS200120">주간/월간 일지</option>
+            <option value="GWS200130">업무환경설정</option>
+            <option value="GWS200140">Daily 현황</option>
+            <option value="COMMON">공통 / 기타</option>
+          </select>
+          <button class="btn ghost sm" id="csvBtn" hidden>CSV 내려받기</button>
+        </div>
+      </div>
+      <div class="cards" id="cards">
+        <div class="panel empty" id="emptyBox"><b>접수된 내용을 불러오는 중입니다</b>잠시 후 목록이 여기에 표시됩니다.</div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <span id="whoami"></span>
+    <button class="lnk" id="logoutBtn" hidden>로그아웃</button>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  'use strict';
+  // ===== 설정 =====
+  const SUPABASE_URL = 'https://hocybumkdvyfclumbfqy.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvY3lidW1rZHZ5ZmNsdW1iZnF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NTYzMjYsImV4cCI6MjEwNzQzMjMyNn0.935uYMphxdewhCWntUPA4rfZN4kITaJF6OCkA9l_6-E';
+  const ADMIN_EMAIL = 'chaeeun@newzen.kr';   // setup.sql 의 is_feedback_admin() 과 같아야 함
+  const ID_DOMAIN = 'todo.newzen.kr';        // 아이디를 계정 이메일로 바꿀 때 붙이는 가짜 도메인 (메일은 발송되지 않음)
+  // ================
+
+  const $ = (id) => document.getElementById(id);
+  const MENU = {GWS200100:'TO-DO', GWS200110:'Daily', GWS200120:'주간/월간 일지', GWS200130:'업무환경설정', GWS200140:'Daily 현황', COMMON:'공통/기타'};
+  const KIND = {bug:'오류', imp:'개선', ask:'문의'};
+  const PRIO = {high:'긴급', mid:'보통', low:'낮음'};
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let me = null, reporterName = '', isAdmin = false, pollTimer = null;
+  let reports = [], filter = 'all', menuFilter = '';
+  let kind = 'bug', prio = 'mid', shot = null, expanded = new Set(), busy = false;
+
+  function setSeg(groupId, attr, val){ document.querySelectorAll('#' + groupId + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === val))); }
+  $('kind').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; kind = b.dataset.kind; setSeg('kind','kind',kind); });
+  $('prio').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; prio = b.dataset.prio; setSeg('prio','prio',prio); });
+
+  function showMsg(id, text, cls){ const m = $(id); m.className = 'msg ' + (cls||''); m.textContent = text; m.hidden = false; }
+  function hideMsg(id){ $(id).hidden = true; }
+  function toast(t){ const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2600); }
+  function el(tag, cls, text){ const n = document.createElement(tag); if(cls) n.className = cls; if(text != null) n.textContent = text; return n; }
+  function fmt(iso){ if(!iso) return ''; const d = new Date(iso); if(isNaN(d)) return ''; const p = n => String(n).padStart(2,'0'); return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  const toEmail = (id) => id.indexOf('@') >= 0 ? id : id + '@' + ID_DOMAIN;
+  const fromEmail = (email) => (email || '').replace('@' + ID_DOMAIN, '');
+
+  // ---------- 캡처: 한 행에 들어갈 크기로 축소 ----------
+  function loadImage(file){ return new Promise((res, rej) => { const url = URL.createObjectURL(file); const img = new Image(); img.onload = () => { URL.revokeObjectURL(url); res(img); }; img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('decode')); }; img.src = url; }); }
+  async function shrink(file){
+    const img = await loadImage(file);
+    let scale = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+    for (let attempt = 0; attempt < 6; attempt++){
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale)); c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', attempt < 2 ? 0.82 : 0.7);
+      if (data.length <= 170000) return data;
+      scale *= 0.78;
+    }
+    throw new Error('too-big');
+  }
+  async function attach(file){
+    if(!file || !file.type.startsWith('image/')) return;
+    try{ shot = await shrink(file); $('shotImg').src = shot; $('shotPreview').hidden = false; $('drop').hidden = true; }
+    catch(e){ showMsg('formMsg', '이미지를 첨부하지 못했습니다. 다른 캡처로 다시 시도해 주세요.', 'err'); }
+  }
+  $('pickBtn').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', () => { attach($('file').files[0]); $('file').value = ''; });
+  $('shotRemove').addEventListener('click', () => { shot = null; $('shotPreview').hidden = true; $('drop').hidden = false; $('shotImg').removeAttribute('src'); });
+  $('body').addEventListener('paste', e => { const items = e.clipboardData && e.clipboardData.items; if(!items) return; for (const it of items){ if(it.type.startsWith('image/')){ e.preventDefault(); attach(it.getAsFile()); return; } } });
+  const drop = $('drop');
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; attach(f); });
+
+  // ---------- 접수 ----------
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault(); hideMsg('formMsg');
+    if(busy || !me) return;
+    const menu = $('menu').value, title = $('title').value.trim(), body = $('body').value.trim();
+    if(!menu){ showMsg('formMsg', '메뉴를 선택해 주세요.', 'err'); $('menu').focus(); return; }
+    if(title.length < 2){ showMsg('formMsg', '제목을 조금 더 구체적으로 적어 주세요.', 'err'); $('title').focus(); return; }
+    if(body.length < 5){ showMsg('formMsg', '내용을 적어 주세요. 오류라면 재현 순서가 가장 도움이 됩니다.', 'err'); $('body').focus(); return; }
+    busy = true; $('submit').disabled = true; $('submit').textContent = '접수 중…';
+    const { error } = await sb.from('todo_feedback').insert({ uid: me.id, menu, kind, priority: prio, title, body, reporter: reporterName, image: shot });
+    busy = false; $('submit').disabled = false; $('submit').textContent = '접수';
+    if(error){ console.error(error); showMsg('formMsg', '저장에 실패했습니다. 잠시 후 다시 시도해 주세요. (' + (error.message || '') + ')', 'err'); return; }
+    toast('접수되었습니다. 감사합니다!');
+    $('title').value = ''; $('body').value = ''; $('shotRemove').click(); kind = 'bug'; setSeg('kind','kind',kind); prio = 'mid'; setSeg('prio','prio',prio);
+    load();
+  });
+
+  // ---------- 목록 ----------
+  async function load(){
+    if(!me) return;
+    const { data, error } = await sb.from('todo_feedback').select('id,uid,menu,kind,priority,title,body,reporter,image,created_at').order('created_at', { ascending: false }).limit(1000);
+    if(error){ console.error(error); emptyNote('목록을 불러오지 못했습니다', '새로고침해 주세요. (' + (error.message || '') + ')'); return; }
+    reports = data || []; render();
+  }
+  function emptyNote(title, text){ const wrap = $('cards'); wrap.textContent = ''; const e = el('div','panel empty'); e.appendChild(el('b', null, title)); e.appendChild(document.createTextNode(text)); wrap.appendChild(e); }
+  function renderStats(){
+    const box = $('stats'); box.textContent = '';
+    if(!me) return;
+    [['전체', reports.length], ['오류', reports.filter(r => r.kind === 'bug').length], ['개선', reports.filter(r => r.kind === 'imp').length], ['문의', reports.filter(r => r.kind === 'ask').length]]
+      .forEach(([k, v]) => { const s = el('div','stat'); s.appendChild(el('b', null, String(v))); s.appendChild(el('span', null, k)); box.appendChild(s); });
+  }
+  function render(){
+    renderStats();
+    const list = reports.filter(r => (!menuFilter || r.menu === menuFilter) && (filter === 'all' || r.kind === filter));
+    $('count').textContent = list.length ? list.length + '건' : '';
+    if(!list.length){
+      if(!reports.length) emptyNote(isAdmin ? '아직 접수된 내용이 없습니다' : '아직 접수한 내용이 없습니다', isAdmin ? '접수되면 이 자리에 표시됩니다.' : '왼쪽 양식으로 첫 접수를 남겨 주세요.');
+      else emptyNote('조건에 맞는 접수가 없습니다', '필터를 바꿔 보세요.');
+      return;
+    }
+    const wrap = $('cards'); wrap.textContent = '';
+    const order = new Map(); reports.slice().sort((a,b) => a.created_at.localeCompare(b.created_at)).forEach((r,i) => order.set(r.id, i+1));
+    list.forEach(r => {
+      const c = el('article', 'panel card');
+      const top = el('div','top');
+      top.appendChild(el('span','num','#' + String(order.get(r.id)).padStart(3,'0')));
+      top.appendChild(el('span','tag menu', MENU[r.menu] || r.menu || '-'));
+      top.appendChild(el('span','tag ' + r.kind, KIND[r.kind] || r.kind));
+      if(r.priority === 'high') top.appendChild(el('span','tag urgent','긴급'));
+      c.appendChild(top);
+      c.appendChild(el('h3', null, r.title || '(제목 없음)'));
+      const meta = el('div','meta'); meta.appendChild(el('span', null, r.reporter || '익명')); meta.appendChild(el('span','when', fmt(r.created_at))); c.appendChild(meta);
+      c.appendChild(el('div','body' + (expanded.has(r.id) ? '' : ' clamp'), r.body || ''));
+      if((r.body || '').split('\n').length > 5 || (r.body || '').length > 260){
+        const more = el('button','lnk', expanded.has(r.id) ? '접기' : '더 보기'); more.type = 'button';
+        more.addEventListener('click', () => { if(expanded.has(r.id)) expanded.delete(r.id); else expanded.add(r.id); render(); });
+        c.appendChild(more);
+      }
+      if(r.image){ const im = el('img','thumb'); im.src = r.image; im.alt = '첨부 캡처'; im.addEventListener('click', () => openLightbox(r.image)); c.appendChild(im); }
+      if(isAdmin || r.uid === me.id){
+        const d = el('button','lnk', isAdmin ? '삭제' : '내 접수 삭제'); d.type = 'button'; d.addEventListener('click', () => confirmDelete(r, d));
+        const row = el('div','r'); row.appendChild(d); c.appendChild(row);
+      }
+      wrap.appendChild(c);
+    });
+  }
+  function confirmDelete(r, btn){
+    if(btn.dataset.armed === '1'){
+      sb.from('todo_feedback').delete().eq('id', r.id).then(({ error }) => { if(error){ toast('삭제 실패'); return; } toast('삭제되었습니다'); load(); });
+      return;
+    }
+    btn.dataset.armed = '1'; const old = btn.textContent; btn.textContent = '정말 삭제? (다시 클릭)';
+    setTimeout(() => { btn.dataset.armed = ''; btn.textContent = old; }, 3000);
+  }
+  function openLightbox(src){
+    const lb = el('div','lightbox'); const im = el('img'); im.src = src; im.alt = '첨부 캡처 확대'; lb.appendChild(im);
+    lb.addEventListener('click', () => lb.remove()); document.body.appendChild(lb);
+    const esc = ev => { if(ev.key === 'Escape'){ lb.remove(); document.removeEventListener('keydown', esc); } }; document.addEventListener('keydown', esc);
+  }
+  $('filters').addEventListener('click', e => { const b = e.target.closest('.chip'); if(!b) return; filter = b.dataset.f; document.querySelectorAll('#filters .chip').forEach(x => x.setAttribute('aria-pressed', String(x === b))); render(); });
+  $('menuFilter').addEventListener('change', () => { menuFilter = $('menuFilter').value; render(); });
+
+  // ---------- 관리자: CSV ----------
+  $('csvBtn').addEventListener('click', () => {
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const rows = [['접수일시','메뉴','구분','긴급도','접수자','제목','내용','캡처'].map(q).join(',')];
+    reports.slice().sort((a,b) => a.created_at.localeCompare(b.created_at)).forEach(r => rows.push([fmt(r.created_at), MENU[r.menu] || r.menu, KIND[r.kind] || r.kind, PRIO[r.priority] || r.priority, r.reporter, r.title, r.body, r.image ? 'Y' : ''].map(q).join(',')));
+    const blob = new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'todo-feedback.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  // ---------- 로그인 / 가입 ----------
+  function switchTab(join){
+    $('tabLogin').setAttribute('aria-selected', String(!join)); $('tabJoin').setAttribute('aria-selected', String(join));
+    $('loginForm').hidden = join; $('joinForm').hidden = !join;
+    (join ? $('joinName') : $('loginId')).focus();
+  }
+  $('tabLogin').addEventListener('click', () => switchTab(false));
+  $('tabJoin').addEventListener('click', () => switchTab(true));
+
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault(); hideMsg('loginMsg');
+    const id = $('loginId').value.trim(), pw = $('loginPw').value;
+    if(!id || !pw){ showMsg('loginMsg', '가입 이메일과 비밀번호를 입력해 주세요.', 'err'); return; }
+    $('loginBtn').disabled = true;
+    const { data, error } = await sb.auth.signInWithPassword({ email: toEmail(id), password: pw });
+    $('loginBtn').disabled = false;
+    if(error || !data.user){ showMsg('loginMsg', '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요. (' + ((error && error.message) || 'no user') + ')', 'err'); return; }
+    $('loginPw').value = ''; enter(data.user);
+  });
+
+  $('joinForm').addEventListener('submit', async e => {
+    e.preventDefault(); hideMsg('joinMsg');
+    const name = $('joinName').value.trim(), dept = $('joinDept').value.trim(), id = $('joinId').value.trim().toLowerCase(), pw = $('joinPw').value, pw2 = $('joinPw2').value;
+    if(!name || !dept){ showMsg('joinMsg', '이름과 부서를 입력해 주세요.', 'err'); return; }
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)){ showMsg('joinMsg', '이메일 형식으로 입력해 주세요. (예: test@newzen.kr)', 'err'); return; }
+    if(pw.length < 6){ showMsg('joinMsg', '비밀번호는 6자 이상이어야 합니다.', 'err'); return; }
+    if(pw !== pw2){ showMsg('joinMsg', '비밀번호 확인이 일치하지 않습니다.', 'err'); return; }
+    $('joinBtn').disabled = true;
+    const { data, error } = await sb.auth.signUp({ email: toEmail(id), password: pw, options: { data: { name, dept } } });
+    $('joinBtn').disabled = false;
+    if(error){
+      const m = error.message || '';
+      showMsg('joinMsg', /already|registered|exists/i.test(m) ? '이미 가입된 이메일입니다. 로그인 탭에서 로그인해 주세요.' : '가입에 실패했습니다. (' + m + ')', 'err');
+      return;
+    }
+    if(!data.session){ showMsg('joinMsg', '가입은 되었지만 바로 로그인되지 않았습니다. 담당자에게 Supabase 설정(Confirm email 끄기)을 확인해 달라고 알려 주세요.', 'warn'); return; }
+    enter(data.user);
+  });
+
+  $('logoutBtn').addEventListener('click', async () => { await sb.auth.signOut(); leave(); });
+
+  function enter(user){
+    me = user;
+    const md = user.user_metadata || {};
+    isAdmin = (user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    reporterName = isAdmin ? '담당자' : ((md.name || fromEmail(user.email)) + (md.dept ? ' (' + md.dept + ')' : ''));
+    $('reporter').value = reporterName;
+    $('whoami').textContent = (isAdmin ? '관리자 · ' : '') + reporterName + ' · ' + fromEmail(user.email);
+    $('logoutBtn').hidden = false; $('authBox').hidden = true; $('main').hidden = false;
+    $('listName').textContent = isAdmin ? '접수 목록 (전체)' : '내 접수 목록';
+    $('csvBtn').hidden = !isAdmin;
+    clearInterval(pollTimer); if(isAdmin) pollTimer = setInterval(load, 30000);
+    load();
+  }
+  function leave(){
+    me = null; isAdmin = false; reports = []; clearInterval(pollTimer);
+    $('whoami').textContent = ''; $('logoutBtn').hidden = true; $('main').hidden = true; $('authBox').hidden = false; $('stats').textContent = '';
+    switchTab(false);
+  }
+
+  async function start(){
+    const { data } = await sb.auth.getSession();
+    if(data && data.session && data.session.user) enter(data.session.user); else leave();
+  }
+  start();
+})();
+</script>
+</body>
+</html>
