@@ -68,6 +68,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
 .btn:disabled{opacity:.55;cursor:not-allowed}
 .btn.ghost{background:transparent;border-color:var(--line-strong);color:var(--fg);font-weight:500}
 .btn.sm{padding:6px 10px;font-size:12.5px}
+.btn.ok{background:var(--imp)}
 .msg{font-size:13px;padding:9px 12px;border-radius:7px;background:var(--accent-soft);color:var(--accent)}
 .msg.err{background:var(--bug-soft);color:var(--bug)}
 .msg.warn{background:var(--ask-soft);color:var(--ask)}
@@ -86,6 +87,17 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
 .tag.menu{background:var(--neutral-soft);color:var(--fg);font-weight:500}
 .tag.bug{background:var(--bug-soft);color:var(--bug)} .tag.imp{background:var(--imp-soft);color:var(--imp)} .tag.ask{background:var(--ask-soft);color:var(--ask)}
 .tag.urgent{background:var(--bug);color:#fff}
+.tag.st-new{background:var(--ask-soft);color:var(--ask)} .tag.st-acked{background:var(--accent-soft);color:var(--accent)} .tag.st-done{background:var(--imp-soft);color:var(--imp)}
+.acts{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card.done{opacity:.7}
+.cmts{display:grid;gap:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.cmt{padding:6px 10px;border-radius:6px;background:var(--neutral-soft);font-size:13px}
+.cmt.admin{background:var(--accent-soft)}
+.cmt-head{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.cmt-head b{color:var(--fg)}
+.cmt-body{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:2px}
+.cmt-new{display:flex;gap:6px}
+.cmt-new .in{flex:1;padding:7px 10px}
 .card h3{font-size:15px;font-weight:600}
 .meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
 .meta .when{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -179,10 +191,10 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
           </div>
         </label>
         <label class="f"><span>제목 <b>*</b></span>
-          <input class="in" id="title" placeholder="예) Daily 상신 후 소요시간이 0으로 보임" maxlength="120">
+          <input class="in" id="title" placeholder="2자 이상 입력" maxlength="120">
         </label>
         <label class="f"><span>내용 <b>*</b></span>
-          <textarea class="in" id="body" placeholder="어느 화면에서, 무엇을 했을 때, 어떻게 되었는지 적어 주세요."></textarea>
+          <textarea class="in" id="body" placeholder="5자 이상 입력"></textarea>
         </label>
         <div class="shot">
           <div class="drop" id="drop">캡처 이미지를 여기에 끌어다 놓거나, 내용 칸에 붙여넣기 · <button type="button" class="lnk" id="pickBtn">파일 선택</button></div>
@@ -205,6 +217,9 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
           <button class="chip" data-f="bug" aria-pressed="false">오류</button>
           <button class="chip" data-f="imp" aria-pressed="false">개선</button>
           <button class="chip" data-f="ask" aria-pressed="false">문의</button>
+          <button class="chip" data-f="new" aria-pressed="false">확인 대기</button>
+          <button class="chip" data-f="acked" aria-pressed="false">접수</button>
+          <button class="chip" data-f="done" aria-pressed="false">완료</button>
           <select class="sel" id="menuFilter" aria-label="메뉴 필터">
             <option value="">모든 메뉴</option>
             <option value="GWS200100">TO-DO</option>
@@ -244,11 +259,12 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
   const MENU = {GWS200100:'TO-DO', GWS200110:'Daily', GWS200120:'주간/월간 일지', GWS200130:'업무환경설정', GWS200140:'Daily 현황', COMMON:'공통/기타'};
   const KIND = {bug:'오류', imp:'개선', ask:'문의'};
   const PRIO = {high:'긴급', mid:'보통', low:'낮음'};
+  const STATE = {new:'확인 대기', acked:'접수', done:'완료'};
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let me = null, reporterName = '', isAdmin = false, pollTimer = null;
-  let reports = [], filter = 'all', menuFilter = '';
+  let reports = [], comments = {}, filter = 'all', menuFilter = '';
   let kind = 'bug', prio = 'mid', shot = null, expanded = new Set(), busy = false;
 
   function setSeg(groupId, attr, val){ document.querySelectorAll('#' + groupId + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === val))); }
@@ -298,8 +314,8 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
     if(busy || !me) return;
     const menu = $('menu').value, title = $('title').value.trim(), body = $('body').value.trim();
     if(!menu){ showMsg('formMsg', '메뉴를 선택해 주세요.', 'err'); $('menu').focus(); return; }
-    if(title.length < 2){ showMsg('formMsg', '제목을 조금 더 구체적으로 적어 주세요.', 'err'); $('title').focus(); return; }
-    if(body.length < 5){ showMsg('formMsg', '내용을 적어 주세요. 오류라면 재현 순서가 가장 도움이 됩니다.', 'err'); $('body').focus(); return; }
+    if(title.length < 2){ showMsg('formMsg', '제목은 2자 이상 적어 주세요.', 'err'); $('title').focus(); return; }
+    if(body.length < 5){ showMsg('formMsg', '내용은 5자 이상 적어 주세요.', 'err'); $('body').focus(); return; }
     busy = true; $('submit').disabled = true; $('submit').textContent = '접수 중…';
     const { error } = await sb.from('todo_feedback').insert({ uid: me.id, menu, kind, priority: prio, title, body, reporter: reporterName, image: shot });
     busy = false; $('submit').disabled = false; $('submit').textContent = '접수';
@@ -312,9 +328,46 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
   // ---------- 목록 ----------
   async function load(){
     if(!me) return;
-    const { data, error } = await sb.from('todo_feedback').select('id,uid,menu,kind,priority,title,body,reporter,image,created_at').order('created_at', { ascending: false }).limit(1000);
+    const { data, error } = await sb.from('todo_feedback').select('id,uid,menu,kind,priority,title,body,reporter,image,state,acked_at,done_at,created_at').order('created_at', { ascending: false }).limit(1000);
     if(error){ console.error(error); emptyNote('목록을 불러오지 못했습니다', '새로고침해 주세요. (' + (error.message || '') + ')'); return; }
-    reports = data || []; render();
+    reports = data || [];
+    const cm = await sb.from('todo_feedback_comment').select('id,feedback_id,uid,author,body,is_admin,created_at').order('created_at', { ascending: true }).limit(5000);
+    comments = {}; (cm.data || []).forEach(x => { (comments[x.feedback_id] = comments[x.feedback_id] || []).push(x); });
+    if(cm.error) console.error(cm.error);
+    render();
+  }
+  async function setState(r, state){
+    const now = new Date().toISOString();
+    const patch = { state, acked_at: state === 'new' ? null : (r.acked_at || now), done_at: state === 'done' ? now : null };
+    const { error } = await sb.from('todo_feedback').update(patch).eq('id', r.id);
+    if(error){ toast('상태 변경 실패 (' + (error.message || '') + ')'); return; }
+    toast(STATE[state] + ' 상태로 바꿨습니다'); load();
+  }
+  async function addComment(r, input, btn){
+    const text = input.value.trim(); if(!text) return;
+    btn.disabled = true;
+    const { error } = await sb.from('todo_feedback_comment').insert({ feedback_id: r.id, uid: me.id, author: isAdmin ? '담당자' : reporterName, body: text, is_admin: isAdmin });
+    btn.disabled = false;
+    if(error){ toast('댓글 저장 실패 (' + (error.message || '') + ')'); return; }
+    input.value = ''; load();
+  }
+  function commentBlock(r){
+    const box = el('div','cmts');
+    (comments[r.id] || []).forEach(x => {
+      const line = el('div','cmt' + (x.is_admin ? ' admin' : ''));
+      const head = el('div','cmt-head'); head.appendChild(el('b', null, x.author)); head.appendChild(el('span','when', fmt(x.created_at)));
+      if(isAdmin || x.uid === me.id){ const d = el('button','lnk','삭제'); d.type = 'button'; d.addEventListener('click', () => { sb.from('todo_feedback_comment').delete().eq('id', x.id).then(({ error }) => { if(error){ toast('삭제 실패'); return; } load(); }); }); head.appendChild(d); }
+      line.appendChild(head); line.appendChild(el('div','cmt-body', x.body)); box.appendChild(line);
+    });
+    if(isAdmin || r.uid === me.id){
+      const row = el('div','cmt-new');
+      const input = el('input','in'); input.placeholder = isAdmin ? '답변 또는 확인 요청을 남기세요' : '담당자에게 덧붙일 말이 있으면 남기세요'; input.maxLength = 2000;
+      const btn = el('button','btn ghost sm','댓글 달기'); btn.type = 'button';
+      btn.addEventListener('click', () => addComment(r, input, btn));
+      input.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); addComment(r, input, btn); } });
+      row.appendChild(input); row.appendChild(btn); box.appendChild(row);
+    }
+    return box;
   }
   function emptyNote(title, text){ const wrap = $('cards'); wrap.textContent = ''; const e = el('div','panel empty'); e.appendChild(el('b', null, title)); e.appendChild(document.createTextNode(text)); wrap.appendChild(e); }
   function renderStats(){
@@ -325,7 +378,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
   }
   function render(){
     renderStats();
-    const list = reports.filter(r => (!menuFilter || r.menu === menuFilter) && (filter === 'all' || r.kind === filter));
+    const list = reports.filter(r => (!menuFilter || r.menu === menuFilter) && (filter === 'all' || (STATE[filter] ? (r.state || 'new') === filter : r.kind === filter)));
     $('count').textContent = list.length ? list.length + '건' : '';
     if(!list.length){
       if(!reports.length) emptyNote(isAdmin ? '아직 접수된 내용이 없습니다' : '아직 접수한 내용이 없습니다', isAdmin ? '접수되면 이 자리에 표시됩니다.' : '왼쪽 양식으로 첫 접수를 남겨 주세요.');
@@ -335,12 +388,22 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
     const wrap = $('cards'); wrap.textContent = '';
     const order = new Map(); reports.slice().sort((a,b) => a.created_at.localeCompare(b.created_at)).forEach((r,i) => order.set(r.id, i+1));
     list.forEach(r => {
-      const c = el('article', 'panel card');
+      const st = r.state || 'new', done = st === 'done';
+      const c = el('article', 'panel card' + (done ? ' done' : ''));
       const top = el('div','top');
       top.appendChild(el('span','num','#' + String(order.get(r.id)).padStart(3,'0')));
       top.appendChild(el('span','tag menu', MENU[r.menu] || r.menu || '-'));
       top.appendChild(el('span','tag ' + r.kind, KIND[r.kind] || r.kind));
       if(r.priority === 'high') top.appendChild(el('span','tag urgent','긴급'));
+      top.appendChild(el('span','tag st-' + st, STATE[st]));
+      if(isAdmin){
+        const acts = el('span','acts');
+        if(st === 'new'){ const b = el('button','btn sm','접수'); b.type = 'button'; b.addEventListener('click', () => setState(r, 'acked')); acts.appendChild(b); }
+        if(st === 'acked'){ const b = el('button','btn sm ok','완료 처리'); b.type = 'button'; b.addEventListener('click', () => setState(r, 'done')); acts.appendChild(b);
+                            const u = el('button','lnk','대기로'); u.type = 'button'; u.addEventListener('click', () => setState(r, 'new')); acts.appendChild(u); }
+        if(st === 'done'){ const u = el('button','lnk','접수로 되돌리기'); u.type = 'button'; u.addEventListener('click', () => setState(r, 'acked')); acts.appendChild(u); }
+        top.appendChild(acts);
+      }
       c.appendChild(top);
       c.appendChild(el('h3', null, r.title || '(제목 없음)'));
       const meta = el('div','meta'); meta.appendChild(el('span', null, r.reporter || '익명')); meta.appendChild(el('span','when', fmt(r.created_at))); c.appendChild(meta);
@@ -351,6 +414,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
         c.appendChild(more);
       }
       if(r.image){ const im = el('img','thumb'); im.src = r.image; im.alt = '첨부 캡처'; im.addEventListener('click', () => openLightbox(r.image)); c.appendChild(im); }
+      c.appendChild(commentBlock(r));
       if(isAdmin || r.uid === me.id){
         const d = el('button','lnk', isAdmin ? '삭제' : '내 접수 삭제'); d.type = 'button'; d.addEventListener('click', () => confirmDelete(r, d));
         const row = el('div','r'); row.appendChild(d); c.appendChild(row);
@@ -377,8 +441,8 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
   // ---------- 관리자: CSV ----------
   $('csvBtn').addEventListener('click', () => {
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const rows = [['접수일시','메뉴','구분','긴급도','접수자','제목','내용','캡처'].map(q).join(',')];
-    reports.slice().sort((a,b) => a.created_at.localeCompare(b.created_at)).forEach(r => rows.push([fmt(r.created_at), MENU[r.menu] || r.menu, KIND[r.kind] || r.kind, PRIO[r.priority] || r.priority, r.reporter, r.title, r.body, r.image ? 'Y' : ''].map(q).join(',')));
+    const rows = [['접수일시','상태','메뉴','구분','긴급도','접수자','제목','내용','캡처','댓글'].map(q).join(',')];
+    reports.slice().sort((a,b) => a.created_at.localeCompare(b.created_at)).forEach(r => rows.push([fmt(r.created_at), STATE[r.state || 'new'], MENU[r.menu] || r.menu, KIND[r.kind] || r.kind, PRIO[r.priority] || r.priority, r.reporter, r.title, r.body, r.image ? 'Y' : '', (comments[r.id] || []).map(x => x.author + ': ' + x.body).join(' | ')].map(q).join(',')));
     const blob = new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'todo-feedback.csv'; document.body.appendChild(a); a.click(); a.remove();
   });
@@ -434,7 +498,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
     $('logoutBtn').hidden = false; $('authBox').hidden = true; $('main').hidden = false;
     $('listName').textContent = isAdmin ? '접수 목록 (전체)' : '내 접수 목록';
     $('csvBtn').hidden = !isAdmin;
-    clearInterval(pollTimer); if(isAdmin) pollTimer = setInterval(load, 30000);
+    clearInterval(pollTimer); pollTimer = setInterval(load, 30000);
     load();
   }
   function leave(){
