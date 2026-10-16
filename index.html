@@ -264,7 +264,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let me = null, reporterName = '', isAdmin = false, pollTimer = null;
-  let reports = [], comments = {}, filter = 'all', menuFilter = '';
+  let reports = [], comments = {}, drafts = {}, pendingRender = false, filter = 'all', menuFilter = '';
   let kind = 'bug', prio = 'mid', shot = null, expanded = new Set(), busy = false;
 
   function setSeg(groupId, attr, val){ document.querySelectorAll('#' + groupId + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === val))); }
@@ -349,8 +349,10 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
     const { error } = await sb.from('todo_feedback_comment').insert({ feedback_id: r.id, uid: me.id, author: isAdmin ? '담당자' : reporterName, body: text, is_admin: isAdmin });
     btn.disabled = false;
     if(error){ toast('댓글 저장 실패 (' + (error.message || '') + ')'); return; }
-    input.value = ''; load();
+    input.value = ''; delete drafts[r.id]; input.blur(); load();
   }
+  // 댓글 입력 중에는 자동 갱신으로 목록을 다시 그리지 않는다 (입력 내용 보존)
+  function typingNow(){ const a = document.activeElement; return !!(a && a.dataset && a.dataset.cmtFor); }
   function commentBlock(r){
     const box = el('div','cmts');
     (comments[r.id] || []).forEach(x => {
@@ -362,6 +364,9 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
     if(isAdmin || r.uid === me.id){
       const row = el('div','cmt-new');
       const input = el('input','in'); input.placeholder = isAdmin ? '답변 또는 확인 요청을 남기세요' : '담당자에게 덧붙일 말이 있으면 남기세요'; input.maxLength = 2000;
+      input.dataset.cmtFor = r.id; input.value = drafts[r.id] || '';
+      input.addEventListener('input', () => { drafts[r.id] = input.value; });
+      input.addEventListener('blur', () => { if(pendingRender){ pendingRender = false; render(); } });
       const btn = el('button','btn ghost sm','댓글 달기'); btn.type = 'button';
       btn.addEventListener('click', () => addComment(r, input, btn));
       input.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); addComment(r, input, btn); } });
@@ -377,6 +382,7 @@ textarea.in{min-height:150px;resize:vertical;line-height:1.5}
       .forEach(([k, v]) => { const s = el('div','stat'); s.appendChild(el('b', null, String(v))); s.appendChild(el('span', null, k)); box.appendChild(s); });
   }
   function render(){
+    if(typingNow()){ pendingRender = true; return; }
     renderStats();
     const list = reports.filter(r => (!menuFilter || r.menu === menuFilter) && (filter === 'all' || (STATE[filter] ? (r.state || 'new') === filter : r.kind === filter)));
     $('count').textContent = list.length ? list.length + '건' : '';
